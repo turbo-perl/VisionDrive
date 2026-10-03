@@ -1,0 +1,58 @@
+name: test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same installer winget uses, fetched from SourceForge, which is
+      # slow and sometimes flaky, so it is kept between runs.
+      - name: Cache the Free Pascal installer
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\fpc-installer
+          key: fpc-3.2.2-win32-and-win64
+
+      - name: Install Free Pascal
+        env:
+          FPC_INSTALLER: ${{ runner.temp }}\fpc-installer\fpc-3.2.2.win32.and.win64.exe
+        run: |
+          if (-not (Test-Path $env:FPC_INSTALLER)) {
+            New-Item -ItemType Directory -Force (Split-Path $env:FPC_INSTALLER) | Out-Null
+            curl.exe -fsSL --retry 3 -o $env:FPC_INSTALLER `
+              https://sourceforge.net/projects/freepascal/files/Win32/3.2.2/fpc-3.2.2.win32.and.win64.exe/download
+          }
+          $hash = (Get-FileHash $env:FPC_INSTALLER -Algorithm SHA256).Hash
+          if ($hash -ne '8C255390544B051388B577EB61C6191A04883264AFE0E3369B3600A56DAF7BDE') {
+            throw "unexpected installer hash $hash"
+          }
+          Start-Process -Wait -FilePath $env:FPC_INSTALLER `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/DIR=C:\FPC\3.2.2'
+
+      - name: Build
+        run: |
+          $fpc = 'C:\FPC\3.2.2\bin\i386-win32\fpc.exe'
+          & $fpc -iV
+          New-Item -ItemType Directory -Force units | Out-Null
+          & $fpc -Px86_64 -FUunits visiondrive.pas
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $fpc -Px86_64 -FUunits tests\keyecho.pas
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Test
+        run: ./tests/run.ps1
+
+      # For other projects' CI to pick up without building it themselves.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visiondrive
+          path: visiondrive.exe
