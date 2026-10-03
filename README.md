@@ -25,7 +25,7 @@ take.
 |---|---|
 | `start [--cols N] [--rows N] -- PROGRAM [ARG...]` | run PROGRAM in a console of its own, N columns by N rows (80 by 25 unless told), with no window; prints the session id |
 | `keys PID KEY...` | type the keys, in order |
-| `screen PID` | print the screen, a line per row, trailing spaces trimmed, as UTF-8 |
+| `screen PID [-e]` | print the screen, a line per row, trailing spaces trimmed, as UTF-8; with `-e`, with its colours as ANSI escapes, as `tmux capture-pane -e` gives them |
 | `wait PID TEXT [--timeout MS] [--gone]` | wait until TEXT is on the screen, or with `--gone` until it is not; 10 seconds unless told |
 | `alive PID` | whether the program is still running |
 | `stop PID` | end the program, and anything it started |

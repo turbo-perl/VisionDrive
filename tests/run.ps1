@@ -35,6 +35,9 @@ $id = & $vd start --cols 90 --rows 20 -- $echo
 Check 'start prints a session id' ($id -match '^\d+$')
 Check 'the console is the size asked for' (Sees $id 'ready 90x20')
 Check 'the screen has as many rows' ((& $vd screen $id).Count -eq 20)
+$esc = [char]27
+Check 'screen -e gives the colours as ANSI escapes' `
+    ((& $vd screen $id -e)[0] -eq "$esc[37m$esc[40mready 90x20$esc[0m")
 
 Key $id 'F8'      'key vk=119 char=0 ctrl=0 alt=0 shift=0'
 Key $id 'C-F9'    'key vk=120 char=0 ctrl=1 alt=0 shift=0'

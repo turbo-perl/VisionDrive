@@ -54,7 +54,7 @@ begin
   if Code = ExitOK then F := @Output else F := @StdErr;
   WriteLn(F^, 'usage: visiondrive start [--cols N] [--rows N] -- PROGRAM [ARG...]');
   WriteLn(F^, '       visiondrive keys   PID KEY...');
-  WriteLn(F^, '       visiondrive screen PID');
+  WriteLn(F^, '       visiondrive screen PID [-e]');
   WriteLn(F^, '       visiondrive wait   PID TEXT [--timeout MS] [--gone]');
   WriteLn(F^, '       visiondrive alive  PID');
   WriteLn(F^, '       visiondrive stop   PID');
@@ -134,15 +134,46 @@ end;
 {  The screen                                                                }
 { -------------------------------------------------------------------------- }
 
+{ In it, but taking a var Word for what is a buffer of attributes. }
+function ReadConsoleOutputAttribute(hConsoleOutput: THandle;
+  lpAttribute: PWord; nLength: DWORD; dwReadCoord: TCoord;
+  out lpNumberOfAttrsRead: DWORD): BOOL; stdcall;
+  external 'kernel32.dll' name 'ReadConsoleOutputAttribute';
+
+const
+  { The console numbers its colours as the VGA did, blue as 1 and red as 4;
+    ANSI has them the other way round. }
+  ConsoleToAnsi: array[0..7] of Integer = (0, 4, 2, 6, 1, 5, 3, 7);
+
+function FgCode(C: Integer): AnsiString;
+begin
+  if C < 8 then Result := IntToStr(30 + ConsoleToAnsi[C])
+  else Result := IntToStr(90 + ConsoleToAnsi[C - 8]);
+  Result := #27'[' + Result + 'm';
+end;
+
+function BgCode(C: Integer): AnsiString;
+begin
+  if C < 8 then Result := IntToStr(40 + ConsoleToAnsi[C])
+  else Result := IntToStr(100 + ConsoleToAnsi[C - 8]);
+  Result := #27'[' + Result + 'm';
+end;
+
 { What is on the program's screen, a line per row of the console window,
-  with trailing spaces trimmed.  Must be called while visiting. }
-function ReadScreen(out Lines: TStringArray): Boolean;
+  with trailing spaces trimmed.  With Colours, each line carries the ANSI
+  escapes for its colours, as tmux capture-pane -e gives them: one for the
+  foreground and one for the background wherever either changes, starting
+  afresh on each line, and a reset at the end.  Must be called while
+  visiting. }
+function ReadScreen(out Lines: TStringArray; Colours: Boolean): Boolean;
 var
   Con  : THandle;
   Info : TConsoleScreenBufferInfo;
-  Row, Width: Integer;
+  Row, Width, i, Fg, Bg, LastFg, LastBg: Integer;
   Buf  : UnicodeString;
-  Got  : DWORD;
+  Attrs: array of Word;
+  Line : UnicodeString;
+  Got, GotAttrs: DWORD;
   At   : TCoord;
 begin
   Result := False;
@@ -154,6 +185,7 @@ begin
     Width := Info.srWindow.Right - Info.srWindow.Left + 1;
     SetLength(Lines, Info.srWindow.Bottom - Info.srWindow.Top + 1);
     SetLength(Buf, Width);
+    SetLength(Attrs, Width);
     for Row := 0 to High(Lines) do
     begin
       At.X := Info.srWindow.Left;
@@ -161,7 +193,28 @@ begin
       Got := 0;
       if not ReadConsoleOutputCharacterW(Con, PWideChar(Buf), Width, At, Got) then
         Exit;
-      Lines[Row] := TrimRight(UTF8Encode(Copy(Buf, 1, Got)));
+      if not Colours then
+      begin
+        Lines[Row] := TrimRight(UTF8Encode(Copy(Buf, 1, Got)));
+        Continue;
+      end;
+      GotAttrs := 0;
+      if not ReadConsoleOutputAttribute(Con, @Attrs[0], Got, At, GotAttrs) then
+        Exit;
+      Line := '';
+      LastFg := -1;
+      LastBg := -1;
+      for i := 0 to Integer(GotAttrs) - 1 do
+      begin
+        Fg := Attrs[i] and $0F;
+        Bg := (Attrs[i] shr 4) and $0F;
+        if Fg <> LastFg then Line := Line + UnicodeString(FgCode(Fg));
+        if Bg <> LastBg then Line := Line + UnicodeString(BgCode(Bg));
+        LastFg := Fg;
+        LastBg := Bg;
+        Line := Line + Buf[i + 1];
+      end;
+      Lines[Row] := TrimRight(UTF8Encode(Line)) + #27'[0m';
     end;
     Result := True;
   finally
@@ -428,11 +481,15 @@ var
   Pid: DWORD;
   Lines: TStringArray;
   OK: Boolean;
+  Colours: Boolean;
   i: Integer;
 begin
-  if ParamCount <> 2 then Usage(ExitUsage);
+  if (ParamCount < 2) or (ParamCount > 3) then Usage(ExitUsage);
+  Colours := (ParamCount = 3) and
+             ((ParamStr(3) = '-e') or (ParamStr(3) = '--colours'));
+  if (ParamCount = 3) and not Colours then Usage(ExitUsage);
   Pid := ParsePid(ParamStr(2));
-  OK := Visit(Pid) and ReadScreen(Lines);
+  OK := Visit(Pid) and ReadScreen(Lines, Colours);
   ComeBack;
   if not OK then
     Fail('cannot read the screen of ' + ParamStr(2) + ': ' + SysErrorMessage(VisitError));
@@ -508,7 +565,7 @@ begin
 
   Started := GetTickCount64;
   repeat
-    Read := Visit(Pid) and ReadScreen(Lines);
+    Read := Visit(Pid) and ReadScreen(Lines, False);
     ComeBack;
     { A program that is still starting may not have a screen yet.  One that
       has gone has certainly stopped showing the text. }
