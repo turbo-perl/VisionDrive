@@ -79,6 +79,17 @@ fpc -Px86_64 -FUunits visiondrive.pas
 `-Px86_64` builds 64-bit with the cross compiler the Windows installer
 includes; leave it off for 32-bit.  Windows only: on Unix, use tmux.
 
+## Tests
+
+```
+fpc -Px86_64 -FUunits testskeyecho.pas
+powershell -File testsun.ps1
+```
+
+`testskeyecho.exe` prints each key it is sent as the console reports it,
+and the tests check VisionDrive sent what it said it would: the key codes,
+the modifiers, the size of the console, and the session coming and going.
+
 ## Licence
 
 Copyright (c) 2026 Graham Ollis.  This is free software; you can
