@@ -82,8 +82,8 @@ includes; leave it off for 32-bit.  Windows only: on Unix, use tmux.
 ## Tests
 
 ```
-fpc -Px86_64 -FUunits testskeyecho.pas
-powershell -File testsun.ps1
+fpc -Px86_64 -FUunits tests\keyecho.pas
+powershell -File tests\run.ps1
 ```
 
 `testskeyecho.exe` prints each key it is sent as the console reports it,
