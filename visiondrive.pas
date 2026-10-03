@@ -47,14 +47,18 @@ const
   ATTACH_PARENT_PROCESS = DWORD(-1);
 
 procedure Usage(Code: Integer);
+var
+  F: ^Text;
 begin
-  WriteLn('usage: visiondrive start [--cols N] [--rows N] -- PROGRAM [ARG...]');
-  WriteLn('       visiondrive keys   PID KEY...');
-  WriteLn('       visiondrive screen PID');
-  WriteLn('       visiondrive wait   PID TEXT [--timeout MS] [--gone]');
-  WriteLn('       visiondrive alive  PID');
-  WriteLn('       visiondrive stop   PID');
-  WriteLn('       visiondrive --version');
+  { Asked for, it is the answer; otherwise it is the complaint. }
+  if Code = ExitOK then F := @Output else F := @StdErr;
+  WriteLn(F^, 'usage: visiondrive start [--cols N] [--rows N] -- PROGRAM [ARG...]');
+  WriteLn(F^, '       visiondrive keys   PID KEY...');
+  WriteLn(F^, '       visiondrive screen PID');
+  WriteLn(F^, '       visiondrive wait   PID TEXT [--timeout MS] [--gone]');
+  WriteLn(F^, '       visiondrive alive  PID');
+  WriteLn(F^, '       visiondrive stop   PID');
+  WriteLn(F^, '       visiondrive --version');
   Halt(Code);
 end;
 
