@@ -72,4 +72,7 @@ Check 'a usage error gives 2' ($LASTEXITCODE -eq 2)
 
 Write-Output ''
 Write-Output "visiondrive tests: $script:pass passed, $script:fail failed"
+# Explicitly: otherwise the status is that of the last program run, and
+# the last check runs one that fails on purpose.
 if ($script:fail -gt 0) { exit 1 }
+exit 0
